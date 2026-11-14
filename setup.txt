@@ -1,0 +1,66 @@
+# inside tamagotchi_wasm folder
+pygbag --template custom.tmpl .
+
+
+
+
+#CARA UPLOAD ke github dan cloudflare
+
+#Install CLI Tools (Cukup Sekali)
+$url = "https://github.com/cli/cli/releases/download/v2.67.0/gh_2.67.0_windows_amd64.msi"
+Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\gh.msi"
+Start-Process msiexec.exe -Wait -ArgumentList "/i `"$env:TEMP\gh.msi`" /qn"
+
+npm install -g wrangler
+
+#login sekali saja
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+gh auth login
+wrangler login
+
+#-----
+# jalankan perintah di bawah ini di powershell
+#----
+
+# 1. Buat .gitignore & requirements.txt
+@"
+build/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+"@ | Out-File -Encoding utf8 .gitignore
+
+@"
+pygame-ce
+pygbag
+"@ | Out-File -Encoding utf8 requirements.txt
+
+# 2. Init Git, Commit & Buat Repo GitHub sekaligus Push
+git init -b main
+git add .
+git commit -m "initial commit"
+gh repo create tamagotchi_wasm_v2 --public --source=. --remote=origin --push
+
+# 3. Build WebAssembly secara lokal
+$env:PYTHONUTF8 = 1
+pygbag --build --template custom.tmpl .
+
+# 4. Buat Project & Langsung Deploy ke Cloudflare Pages
+wrangler pages project create tamagotchi-wasm-v2 --production-branch=main
+wrangler pages deploy build/web --project-name=tamagotchi-wasm-v2
+
+#Setelah selesai, terminal akan langsung menampilkan URL live https://tamagotchi-wasm-v2.pages.dev
+
+#----
+# kalau sering update, buat file deploy.ps1
+# Setiap kali selesai mengubah kode, cukup jalankan .\deploy.ps1 "fix ui" di terminal untuk otomatis commit, push ke GitHub, build Wasm, dan deploy ke Cloudflare Pages sekaligus.
+
+param([string]$msg = "update app")
+
+$env:PYTHONUTF8 = 1
+git add .
+git commit -m $msg
+git push
+pygbag --build --template custom.tmpl .
+wrangler pages deploy build/web --project-name=tamagotchi-wasm-v2
